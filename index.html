@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' file: https://lh3.googleusercontent.com data:; media-src 'self' file:;">
+    <title>Dosya Düzenleyici Pro - DualView</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Courier+Prime&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+        extend: {
+            "colors": {
+                    "on-secondary-fixed": "#1b1c1c",
+                    "on-tertiary": "#303030",
+                    "surface-container-high": "#2a2a2a",
+                    "primary-fixed-dim": "#a6c8ff",
+                    "secondary-fixed-dim": "#c8c6c6",
+                    "primary": "#a6c8ff",
+                    "surface-container-lowest": "#0e0e0e",
+                    "tertiary-fixed": "#e4e2e1",
+                    "tertiary": "#c8c6c6",
+                    "on-error": "#690005",
+                    "on-primary": "#003060",
+                    "secondary": "#c8c6c6",
+                    "surface-variant": "#353534",
+                    "on-secondary": "#303030",
+                    "background": "#131313",
+                    "surface": "#131313",
+                    "surface-container-low": "#1c1b1b",
+                    "on-surface-variant": "#c1c6d4",
+                    "on-tertiary-fixed-variant": "#474747",
+                    "on-primary-container": "#dbe7ff",
+                    "tertiary-container": "#686767",
+                    "primary-container": "#0067c0",
+                    "on-error-container": "#ffdad6",
+                    "surface-tint": "#a6c8ff",
+                    "secondary-fixed": "#e4e2e1",
+                    "outline": "#8b919d",
+                    "surface-container-highest": "#353534",
+                    "tertiary-fixed-dim": "#c8c6c6",
+                    "error-container": "#93000a",
+                    "outline-variant": "#414752",
+                    "on-secondary-fixed-variant": "#474747",
+                    "inverse-primary": "#005eb1",
+                    "inverse-surface": "#e5e2e1",
+                    "on-secondary-container": "#b6b5b4",
+                    "on-background": "#e5e2e1",
+                    "surface-dim": "#131313",
+                    "on-primary-fixed-variant": "#004787",
+                    "primary-fixed": "#d5e3ff",
+                    "on-surface": "#e5e2e1",
+                    "surface-bright": "#393939",
+                    "on-primary-fixed": "#001c3b",
+                    "inverse-on-surface": "#313030",
+                    "on-tertiary-container": "#e8e6e5",
+                    "secondary-container": "#474747",
+                    "surface-container": "#201f1f",
+                    "on-tertiary-fixed": "#1b1c1c",
+                    "error": "#ffb4ab"
+            },
+            "fontFamily": {
+                    "label-md": ["JetBrains Mono"],
+                    "headline-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-sm": ["JetBrains Mono"],
+                    "body-sm": ["Inter"],
+                    "title-md": ["Inter"],
+                    "display-sm": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "mono-sm": ["JetBrains Mono"]
+            }
+        },
+        }
+    }
+    </script>
+    <style>
+        /* Custom Scrollbar for Panes */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #414752; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8b919d; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface h-screen overflow-hidden flex flex-col font-body-md select-none dark">
+<!-- TopNavBar -->
+<header class="bg-surface flex justify-between items-center h-12 px-4 w-full z-50 border-b border-outline-variant">
+    <div class="flex items-center gap-4">
+        <span class="material-symbols-outlined text-primary text-2xl">compare_arrows</span>
+        <span class="font-headline-sm text-headline-sm font-bold text-primary">Dosya Düzenleyici Pro</span>
+    </div>
+</header>
+<!-- Main Workspace -->
+<main class="flex-1 flex overflow-hidden mb-8">
+    <!-- Center Panel: Media Preview (En Solda) -->
+    <section class="w-1/2 h-full flex flex-col bg-surface-bright relative border-r border-outline-variant">
+        <div class="px-4 py-3 border-b border-outline-variant bg-surface-container flex items-center justify-between min-h-[60px]" id="preview-header">
+            <div class="flex items-center gap-3">
+                <span id="preview-icon" class="material-symbols-outlined text-on-surface-variant text-xl">image</span>
+                <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center gap-2">
+                        <h2 id="preview-title" class="font-title-md text-title-md text-on-surface m-0 leading-tight">Önizleme Yok</h2>
+                        <span id="preview-size" class="px-2 py-0.5 bg-secondary-container text-on-secondary-container rounded-full text-[10px] font-bold uppercase tracking-wider hidden">0 MB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Preview Canvas -->
+        <div class="flex-1 bg-surface-dim relative overflow-hidden flex items-center justify-center p-8">
+            <div id="preview-canvas" class="w-full h-full max-h-full max-w-full flex items-center justify-center relative group">
+                <div class="text-on-surface-variant text-center opacity-50 flex flex-col items-center">
+                    <span class="material-symbols-outlined text-4xl mb-2">preview</span>
+                    <p>Dosya içeriğini görmek için listeden bir öğeye tıklayın.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Right Panel: Hedef Klasörler (Ortada) -->
+    <section class="w-1/4 h-full flex flex-col bg-surface-container-low border-r border-outline-variant">
+        <div class="px-3 py-2 border-b border-outline-variant bg-surface-container flex items-center justify-between">
+            <span class="font-label-md text-label-md text-on-surface-variant" id="target-path-label" title="Hedef Klasör">Hedef Klasör (Seçilmedi)</span>
+            <div class="flex gap-1">
+                <button id="btn-select-target" class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors" title="Hedef Klasör Seç">
+                    <span class="material-symbols-outlined text-[16px]">create_new_folder</span>
+                </button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto py-2">
+            <div class="px-2" id="target-folders-container">
+                <div class="text-on-surface-variant text-center mt-10 italic">Lütfen hedef klasörü seçin.</div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Left Panel: Kaynak Dosyalar (En Sağda) -->
+    <section class="w-1/4 h-full flex flex-col bg-surface-container-low">
+        <div class="px-3 py-2 border-b border-outline-variant bg-surface-container flex items-center justify-between">
+            <span class="font-label-md text-label-md text-on-surface-variant" id="source-path-label" title="Kaynak Klasör">Kaynak Klasör (Seçilmedi)</span>
+            <div class="flex gap-1">
+                <button id="btn-undo-source" class="p-1 rounded text-error hover:text-on-error hover:bg-error transition-colors hidden" title="Klasörleri Çıkar (Geri Al)">
+                    <span class="material-symbols-outlined text-[16px]">undo</span>
+                </button>
+                <button id="btn-select-source" class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors" title="Kaynak Klasör Seç">
+                    <span class="material-symbols-outlined text-[16px]">folder_open</span>
+                </button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto py-2">
+            <div class="px-2" id="source-files-container">
+                <div class="text-on-surface-variant text-center mt-10 italic">Lütfen bir klasör seçin.</div>
+            </div>
+        </div>
+    </section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container h-8 border-t border-outline-variant flat no shadows fixed bottom-0 left-0 w-full z-50 flex justify-between items-center px-4 font-label-md text-label-md text-on-surface-variant">
+    <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+            <span id="status-text">Sistem Hazır</span>
+        </div>
+        <div class="flex items-center gap-1 text-primary font-medium">
+            <span class="material-symbols-outlined text-sm">info</span>
+            <span>Dosyaları taşımak için sağ panele sürükleyin</span>
+        </div>
+    </div>
+    <div class="flex gap-4">
+        <span id="status-count">0 Öğe</span>
+    </div>
+</footer>
+
+<script src="renderer.js"></script>
+</body>
+</html>

@@ -1,10 +1,25 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const mammoth = require('mammoth');
-const heicConvert = require('heic-convert');
+const sharp = require('sharp');
 
 let mainWindow;
+
+// GÜVENLİK YAMASI 2: Path Traversal (Yetkisiz Dizin Geçişi) Önlemi
+// Uygulamanın sadece kullanıcının açıkça seçtiği klasörlerin içinde işlem yapmasını sağlayan "Sandbox" Listesi
+let allowedPaths = new Set();
+
+function isPathAllowed(targetPath) {
+    if (!targetPath) return false;
+    const resolvedPath = path.resolve(targetPath);
+    for (const allowed of allowedPaths) {
+        if (resolvedPath.startsWith(path.resolve(allowed))) {
+            return true;
+        }
+    }
+    return false;
+}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -15,16 +30,34 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             plugins: true,
-            webSecurity: false
+            // GÜVENLİK YAMASI 1: XSS to Local File Read/RCE açığını önlemek için Cross-Origin politikası zorunlu kılındı.
+            webSecurity: true 
         },
         autoHideMenuBar: true,
-        title: 'Dosya Düzenleyici Pro'
+        title: 'Dosya Düzenleyici Pro (Red Team Secured)'
     });
 
     mainWindow.loadFile('index.html');
 }
 
 app.whenReady().then(() => {
+    // GÜVENLİK YAMASI 1.1: webSecurity aktif edildiğinde lokal imajların güvenli gösterimi için Custom Sandbox Protocol.
+    protocol.registerFileProtocol('safe-file', (request, callback) => {
+        const url = request.url.replace('safe-file://', '');
+        try {
+            const decodedPath = decodeURIComponent(url);
+            // Path Traversal engelleyici
+            if (isPathAllowed(decodedPath)) {
+                return callback(decodedPath);
+            } else {
+                console.warn(`[GÜVENLİK İHLALİ ENGELLENDİ] safe-file: ${decodedPath}`);
+                return callback(403); 
+            }
+        } catch (error) {
+            return callback(404);
+        }
+    });
+
     createWindow();
 
     app.on('activate', () => {
@@ -40,7 +73,7 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Klasör Seçim İsteği
+// Klasör Seçim İsteği (Sandbox yetki verme noktası)
 ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
         properties: ['openDirectory']
@@ -48,12 +81,13 @@ ipcMain.handle('dialog:openDirectory', async () => {
     if (canceled) {
         return null;
     } else {
+        allowedPaths.add(filePaths[0]); // Seçilen klasör Sandbox yetkisine eklendi.
         return filePaths[0];
     }
 });
 
-// Kaynak Dosyaları Okuma (Gruplanmış ve Sıralanmış - Recursive & Optimized for IPC)
 ipcMain.handle('fs:readSourceFiles', async (event, dirPath) => {
+    if (!isPathAllowed(dirPath)) return { groups: {}, totalCount: 0 };
     try {
         const filesArray = [];
         
@@ -63,9 +97,8 @@ ipcMain.handle('fs:readSourceFiles', async (event, dirPath) => {
                 for (const item of items) {
                     const itemPath = path.join(currentPath, item.name);
                     if (item.isDirectory()) {
-                        // Kısır döngüleri ve gizli sistem klasörlerini atlamak için
                         if (item.name.startsWith('$') || item.name === 'System Volume Information') continue;
-                        await scanDirectory(itemPath); // Recursive
+                        await scanDirectory(itemPath); 
                     } else if (item.isFile()) {
                         try {
                             const stat = await fs.promises.stat(itemPath);
@@ -93,26 +126,23 @@ ipcMain.handle('fs:readSourceFiles', async (event, dirPath) => {
                 groupedFiles[f.group] = { totalItems: 0, files: [] };
             }
             groupedFiles[f.group].totalItems++;
-            // UI'ı kilitlenmekten kurtarmak için sadece ilk 50 dosyayı aktar
             if (groupedFiles[f.group].files.length < 50) {
                 groupedFiles[f.group].files.push(f);
             }
         });
 
-        // Kısmi boyut sıralaması
         Object.keys(groupedFiles).forEach(group => {
             groupedFiles[group].files.sort((a, b) => b.size - a.size);
         });
 
         return { groups: groupedFiles, totalCount: filesArray.length };
     } catch (error) {
-        console.error("Kaynak klasör okunamadı:", error);
         return { groups: {}, totalCount: 0 };
     }
 });
 
-// Hedef Klasör Hiyerarşisini Okuma
 ipcMain.handle('fs:readTargetFolders', async (event, dirPath) => {
+    if (!isPathAllowed(dirPath)) return [];
     try {
         const items = fs.readdirSync(dirPath, { withFileTypes: true });
         const folders = [];
@@ -128,7 +158,6 @@ ipcMain.handle('fs:readTargetFolders', async (event, dirPath) => {
                     files: []
                 };
                 
-                // Klasörün içindeki dosyaları oku (sadece 1 kademe)
                 try {
                     const subItems = fs.readdirSync(folderPath, { withFileTypes: true });
                     for (const sub of subItems) {
@@ -144,9 +173,7 @@ ipcMain.handle('fs:readTargetFolders', async (event, dirPath) => {
                             } catch(e) {}
                         }
                     }
-                    // Dosyaları boyuta göre sırala
                     folderObj.files.sort((a, b) => b.size - a.size);
-                    // UI çökmesin diye ilk 100 tanesini alalım
                     if (folderObj.files.length > 100) {
                          folderObj.files = folderObj.files.slice(0, 100);
                     }
@@ -157,44 +184,51 @@ ipcMain.handle('fs:readTargetFolders', async (event, dirPath) => {
         }
         return folders;
     } catch (error) {
-        console.error("Hedef klasör okunamadı:", error);
         return [];
     }
 });
 
-// Dosya Taşıma
 ipcMain.handle('fs:moveFile', async (event, sourcePath, targetDir) => {
+    if (!isPathAllowed(sourcePath) || !isPathAllowed(targetDir)) {
+        return { success: false, error: 'Sandbox yetkisi dışında işlem reddedildi.' };
+    }
     try {
         const fileName = path.basename(sourcePath);
         const destPath = path.join(targetDir, fileName);
-        
         fs.renameSync(sourcePath, destPath);
         return { success: true, newPath: destPath };
     } catch (error) {
-        console.error("Dosya taşıma hatası:", error);
         return { success: false, error: error.message };
     }
 });
 
-// HEIC Dosyalarını Okuma (Preview için)
-ipcMain.handle('fs:readHeicContent', async (event, filePath) => {
+ipcMain.handle('fs:deleteFile', async (event, filePath) => {
+    if (!isPathAllowed(filePath)) {
+        return { success: false, error: 'Sandbox yetkisi dışında işlem reddedildi.' };
+    }
     try {
-        const inputBuffer = await fs.promises.readFile(filePath);
-        const outputBuffer = await heicConvert({
-            buffer: inputBuffer, // the HEIC file buffer
-            format: 'JPEG',      // output format
-            quality: 0.5         // the jpeg compression quality, between 0 and 1
-        });
+        await shell.trashItem(filePath);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('fs:readHeicContent', async (event, filePath) => {
+    if (!isPathAllowed(filePath)) return { success: false, error: 'Yetkisiz erişim.' };
+    try {
+        const outputBuffer = await sharp(filePath)
+            .jpeg({ quality: 50 })
+            .toBuffer();
         const base64Str = outputBuffer.toString('base64');
         return { success: true, base64: base64Str };
     } catch (error) {
-        console.error('HEIC çevirme hatası:', error);
         return { success: false, error: error.message };
     }
 });
 
-// Tüm Dosyaları Otomatik Düzenle (.bat scripti mantığı) - Ram/IPC Dostu
 ipcMain.handle('fs:autoOrganize', async (event, sourceDir) => {
+    if (!isPathAllowed(sourceDir)) return { success: false, error: 'Yetki reddedildi.' };
     try {
         let successCount = 0;
         let failCount = 0;
@@ -205,12 +239,7 @@ ipcMain.handle('fs:autoOrganize', async (event, sourceDir) => {
                 for (const item of items) {
                     const itemPath = path.join(currentPath, item.name);
                     if (item.isDirectory()) {
-                        // Oluşturduğumuz klasörlere geri girmemesi ve döngüye girmemesi için:
-                        // Eğer bu klasör ana dizindeyse ve isminde nokta yoksa es geçebiliriz ama en iyisi:
                         if (item.name.startsWith('$') || item.name === 'System Volume Information') continue;
-                        // Hedef klasörleri okuma ki sonsuz döngü olmasın (ör: 'JPG' klasörünün içine tekrar girmemeli)
-                        // Bunu anlamak için sourceDir klasörünün altındaki doğrudan klasörler eğer hedeflerse onlara girmeyebiliriz. 
-                        // Fakat daha basit bir recursive kontrol yapalım.
                         await organizeDirectory(itemPath);
                     } else if (item.isFile()) {
                         try {
@@ -228,9 +257,7 @@ ipcMain.handle('fs:autoOrganize', async (event, sourceDir) => {
                                 fs.renameSync(itemPath, destPath);
                                 successCount++;
                             }
-                        } catch (err) {
-                            failCount++;
-                        }
+                        } catch (err) { failCount++; }
                     }
                 }
             } catch (e) {}
@@ -239,13 +266,12 @@ ipcMain.handle('fs:autoOrganize', async (event, sourceDir) => {
         await organizeDirectory(sourceDir);
         return { success: true, successCount, failCount };
     } catch (error) {
-        console.error("Otomatik organize hatası:", error);
         return { success: false, error: error.message };
     }
 });
 
-// Otomatik Düzenlemeyi Geri Al (Dosyaları Ana Klasöre Çıkar)
 ipcMain.handle('fs:undoAutoOrganize', async (event, sourceDir) => {
+    if (!isPathAllowed(sourceDir)) return { success: false, error: 'Yetki reddedildi.' };
     try {
         let successCount = 0;
         let failCount = 0;
@@ -268,7 +294,6 @@ ipcMain.handle('fs:undoAutoOrganize', async (event, sourceDir) => {
                             }
                         }
                     }
-                    // Klasör içi boşaldıysa klasörü sil
                     const checkEmpty = await fs.promises.readdir(folderPath);
                     if (checkEmpty.length === 0) {
                         fs.rmdirSync(folderPath);
@@ -282,11 +307,10 @@ ipcMain.handle('fs:undoAutoOrganize', async (event, sourceDir) => {
     }
 });
 
-// Metin Dosyalarını Okuma (Preview için)
 ipcMain.handle('fs:readFileContent', async (event, filePath) => {
+    if (!isPathAllowed(filePath)) return { error: 'Güvenlik İhlali: Sandbox dışı dosya okunamaz.' };
     try {
         const stat = await fs.promises.stat(filePath);
-        // Eğer 5 MB'dan büyükse tam okuma
         if (stat.size > 5 * 1024 * 1024) {
             return { error: 'Dosya çok büyük (5MB+). Önizleme desteklenmiyor.' };
         }
@@ -297,11 +321,11 @@ ipcMain.handle('fs:readFileContent', async (event, filePath) => {
     }
 });
 
-// DOCX Dosyalarını Okuma (Preview için)
 ipcMain.handle('fs:readDocxContent', async (event, filePath) => {
+    if (!isPathAllowed(filePath)) return { success: false, error: 'Güvenlik ihlali.' };
     try {
         const stat = await fs.promises.stat(filePath);
-        if (stat.size > 20 * 1024 * 1024) { // 20 MB Limit
+        if (stat.size > 20 * 1024 * 1024) { 
             return { success: false, error: 'Word dosyası çok büyük (20MB+).' };
         }
         const result = await mammoth.convertToHtml({path: filePath});
@@ -310,4 +334,3 @@ ipcMain.handle('fs:readDocxContent', async (event, filePath) => {
         return { success: false, error: 'Dosya okunurken hata oluştu veya bozuk: ' + error.message };
     }
 });
-

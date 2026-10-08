@@ -10,10 +10,6 @@
   },
   "build": {
     "appId": "com.dosyaduzenleyici.pro",
-    "files": [
-      "**/*",
-      "!tailwindcss.exe"
-    ],
     "win": {
       "icon": "build/icon.png",
       "target": "portable"
@@ -27,13 +23,13 @@
     "electron-builder": "^24.13.3",
     "postcss": "^8.5.26",
     "rimraf": "^6.1.3",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^3.4.19"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
-    "heic-convert": "^2.1.0",
     "mammoth": "^1.8.0",
-    "material-symbols": "^0.46.0"
+    "material-symbols": "^0.46.0",
+    "sharp": "^0.35.3"
   }
 }

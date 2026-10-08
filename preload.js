@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     undoAutoOrganize: (targetDir) => ipcRenderer.invoke('fs:undoAutoOrganize', targetDir),
     readFileContent: (filePath) => ipcRenderer.invoke('fs:readFileContent', filePath),
     readDocxContent: (filePath) => ipcRenderer.invoke('fs:readDocxContent', filePath),
-    readHeicContent: (filePath) => ipcRenderer.invoke('fs:readHeicContent', filePath)
+    readHeicContent: (filePath) => ipcRenderer.invoke('fs:readHeicContent', filePath),
+    deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath)
 });
